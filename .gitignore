@@ -22,3 +22,6 @@ target/
 
 # enviroment variable file
 .env
+
+#command
+command.txt
