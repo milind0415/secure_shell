@@ -19,6 +19,7 @@ pub struct File {
     pub file_size: i64,
     pub file_name: String,
     pub encrypted_aes_key: Vec<u8>,
+    pub encrypted_file: Vec<u8>,
     pub iv: Vec<u8>,
     pub created_at: Option<DateTime<Utc>>
 }
