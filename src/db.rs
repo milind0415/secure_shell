@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use sqlx::{Pool, Postgres};
+use sqlx::{query, Pool, Postgres};
 use uuid:: Uuid;
 
 use crate::models::{File, RecieveFileDetails, SendFileDetails, ShareLink, User};
@@ -140,5 +140,116 @@ impl UserExt for DBClient {
         .await?;
     
         Ok(user)
+    }
+
+    async fn update_user_name<T: Into<String> + Send>(
+        &self,
+        user_id: Uuid,
+        new_name: T
+    ) -> Result<User, sqlx::Error>{
+        let user = sqlx::query_as!(
+            User,
+            r#"
+            UPDATE users
+            SET name = $1, updated_at = Now()
+            WHERE id = $2
+            RETURNING id, name, email, password, public_key, created_at, updated_at
+            "#,
+            new_name.into(),
+            user_id
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(user)
+    }
+
+    async fn upadte_user_password(
+        &self,
+        user_id: Uuid,
+        new_password: String
+    ) -> Result<User, sqlx::Error> {
+        let user = sqlx::query_as!(
+            User,
+            r#"
+            UPDATE users
+            SET public_key = $1, updated_at = Now()
+            WHERE id = $2
+            RETURNING id, name, email, password, public_key, created_at, updated_at
+            "#,
+            public_key,
+            user_id
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(user)
+    }
+
+    async fn search_by_email(
+        &self,
+        user_id: Uuid,
+        query: String,
+    ) -> Result<Vec<User>, sqlx::Error> {
+        let user = sqlx::query_as!(
+            User,
+            r#"
+            SELECT id, name, email, password, public_key, created_at, updated_at
+            FROM users
+            WHERE email LIKE $1
+            AND public_key IS NOT NULL
+            AND id != $2
+            "#,
+            query,
+            user_id
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(user)
+    }
+
+    async fn save_encrypted_file(
+        &self,
+        user_id: Uuid,
+        file_name: String,
+        file_size: u64,
+        recipient_user_id: Uuid,
+        password: String,
+        expiration_date: DateTime<Utc>,
+        encrypted_aes_key: Vec<u8>,
+        encrypted_file: Vec<u8>,
+        iv: Vec<u8>,
+    ) -> Result<(), sqlx::Error> {
+        let file_id: Uuid = sqlx:: query_scalar!(
+            r#"
+            INSERT INTO files (user_id, file_name, file_size, encrypted_aes_key, encrypted_file, iv, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, NOW())
+            RETURNING id
+            "#,
+            user_id,
+            file_name,
+            file_size,
+            encrypted_aes_key,
+            encrypted_file,
+            iv
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        sqlx::query!(
+            r#"
+            INSERT INTO shared_links (file_id, recipient_user_id, password, expiration_date, created_at)
+            VALUES ($1, $2, $3, $4, NOW())
+            "#,
+            file_id,
+            recipient_user_id,
+            password,
+            expiration_date,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
     }
 }
