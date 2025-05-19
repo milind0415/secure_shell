@@ -44,7 +44,7 @@ pub struct SendFileDetails {
 }
 
 #[derive(sqlx::FromRow)]
-pub struct RecieveFileDetails {
+pub struct ReceiveFileDetails {
     pub file_id: uuid:: Uuid,
     pub file_name: String,
     pub sender_email: String,
